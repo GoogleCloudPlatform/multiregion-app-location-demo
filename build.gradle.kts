@@ -37,7 +37,7 @@ application {
 }
 
 jib {
-    to.image = "gcr.io/${System.getenv("PROJECT_ID")}/where-am-i"
+    //to.image = "gcr.io/${System.getenv("PROJECT_ID")}/where-am-i"
     container.mainClass = "WebAppKt"
 }
 
