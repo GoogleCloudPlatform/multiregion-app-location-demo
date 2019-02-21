@@ -6,6 +6,7 @@ plugins {
     application
     kotlin("jvm") version "1.3.20"
     id("kotlinx-serialization") version "1.3.20"
+    id("com.google.cloud.tools.jib") version "1.0.0"
 }
 
 repositories {
@@ -35,6 +36,7 @@ application {
     mainClassName = "WebAppKt"
 }
 
+jib.to.image = "gcr.io/${System.getenv("PROJECT_ID")}/where-am-i"
 
 // one task that does both the continuous compile and the run
 
