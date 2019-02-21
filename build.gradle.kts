@@ -36,7 +36,10 @@ application {
     mainClassName = "WebAppKt"
 }
 
-jib.to.image = "gcr.io/${System.getenv("PROJECT_ID")}/where-am-i"
+jib {
+    to.image = "gcr.io/${System.getenv("PROJECT_ID")}/where-am-i"
+    container.mainClass = "WebAppKt"
+}
 
 // one task that does both the continuous compile and the run
 
