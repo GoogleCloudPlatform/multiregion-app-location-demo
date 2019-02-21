@@ -1,1 +1,1 @@
-web: java -jar build/libs/where-am-i.jar
+web: java $JAVA_OPTS -jar build/libs/*.jar
