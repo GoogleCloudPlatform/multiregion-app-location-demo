@@ -143,5 +143,6 @@ fun ipInfoAsync(): Deferred<IpInfo?> {
 
 @KtorExperimentalAPI
 fun main() {
-    embeddedServer(CIO, 8080, watchPaths = listOf("build"), module = Application::module).start(true)
+    val port = System.getenv("PORT")?.toInt() ?: 8080
+    embeddedServer(CIO, port, watchPaths = listOf("build"), module = Application::module).start(true)
 }
