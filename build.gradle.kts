@@ -7,6 +7,7 @@ plugins {
     kotlin("jvm") version "1.3.20"
     id("kotlinx-serialization") version "1.3.20"
     id("com.google.cloud.tools.jib") version "1.0.0"
+    id("com.github.johnrengelman.shadow") version "4.0.4"
 }
 
 repositories {
@@ -42,6 +43,11 @@ jib {
     to.image = "gcr.io/$projectId/where-am-i"
     container.mainClass = "WebAppKt"
 }
+
+tasks.create("stage") {
+    dependsOn("shadowJar")
+}
+
 
 // one task that does both the continuous compile and the run
 
