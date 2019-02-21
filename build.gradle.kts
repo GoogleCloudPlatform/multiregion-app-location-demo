@@ -36,10 +36,10 @@ application {
     mainClassName = "WebAppKt"
 }
 
-println(System.getenv("PROJECT_ID"))
-
 jib {
-    to.image = "gcr.io/${System.getenv("PROJECT_ID")}/where-am-i"
+    val projectId: String? by project
+
+    to.image = "gcr.io/$projectId/where-am-i"
     container.mainClass = "WebAppKt"
 }
 
