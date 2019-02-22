@@ -59,6 +59,9 @@ fun Application.module() {
             else
                 call.respondText("Could not get location")
         }
+        get("/ping") {
+            call.respondText("pong")
+        }
         static("assets") {
             resources("assets")
         }

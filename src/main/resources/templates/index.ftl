@@ -7,5 +7,22 @@
 </head>
 <body>
     <h2>hello, from ${location}!</h2>
+
+    <p id="ping">Calculating round trip time...</p>
+
+    <script>
+        var t0 = Date.now();
+
+        var req = new XMLHttpRequest();
+        req.addEventListener("load", function() {
+          var t1 = Date.now();
+
+          var elapsed = (t1 - t0);
+
+          document.getElementById("ping").innerText = "Ping took " + elapsed + "ms";
+        });
+        req.open("GET", "/ping?" + Math.random());
+        req.send();
+    </script>
 </body>
 </html>
