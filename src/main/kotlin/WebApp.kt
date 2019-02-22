@@ -22,6 +22,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.features.json.JsonFeature
 import io.ktor.client.features.json.serializer.KotlinxSerializer
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.url
 import io.ktor.features.CallLogging
 import io.ktor.features.DefaultHeaders
@@ -29,7 +30,6 @@ import io.ktor.freemarker.FreeMarker
 import io.ktor.freemarker.FreeMarkerContent
 import io.ktor.http.content.resources
 import io.ktor.http.content.static
-import io.ktor.http.headersOf
 import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.routing.Routing
@@ -68,7 +68,7 @@ fun Application.module() {
 suspend fun gcpExternalIp(client: HttpClient): String {
     return client.get {
         url("http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip")
-        headersOf("Metadata-Flavor", "Google")
+        header("Metadata-Flavor", "Google")
     }
 }
 
