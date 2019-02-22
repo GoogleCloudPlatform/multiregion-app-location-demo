@@ -65,36 +65,24 @@ fun Application.module() {
     }
 }
 
-suspend fun gcpExternalIp(): String {
-    val client = HttpClient()
-
-    val ip = client.get<String> {
+suspend fun gcpExternalIp(client: HttpClient): String {
+    return client.get {
         url("http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip")
         headersOf("Metadata-Flavor", "Google")
     }
-
-    client.close()
-
-    return ip
 }
 
-suspend fun ipifyIp(): String {
-    val client = HttpClient()
-
-    val ip = client.get<String>("https://api.ipify.org")
-
-    client.close()
-
-    return ip
+suspend fun ipifyIp(client: HttpClient): String {
+    return client.get("https://api.ipify.org")
 }
 
-suspend fun externalIp(): String? {
+suspend fun externalIp(client: HttpClient): String? {
     return try {
-        gcpExternalIp()
+        gcpExternalIp(client)
     }
     catch (e: Exception) {
         try {
-            ipifyIp()
+            ipifyIp(client)
         }
         catch (e: Exception) {
             null
@@ -113,18 +101,8 @@ data class Geo(
         val regionName: String
 )
 
-suspend fun geoIp(ip: String): Geo {
-    val client = HttpClient {
-        install(JsonFeature) {
-            serializer = KotlinxSerializer(Json.nonstrict)
-        }
-    }
-
-    val geo = client.get<Geo>("http://ip-api.com/json/$ip")
-
-    client.close()
-
-    return geo
+suspend fun geoIp(ip: String, client: HttpClient): Geo {
+    return client.get("http://ip-api.com/json/$ip")
 }
 
 @Serializable
@@ -132,11 +110,21 @@ data class IpInfo(val externalIp: String, val geo: Geo)
 
 fun ipInfoAsync(): Deferred<IpInfo?> {
     return GlobalScope.async {
-        val externalIp = externalIp()
-        if (externalIp != null)
-            IpInfo(externalIp, geoIp(externalIp))
+        val client = HttpClient {
+            install(JsonFeature) {
+                serializer = KotlinxSerializer(Json.nonstrict)
+            }
+        }
+
+        val externalIp = externalIp(client)
+        val maybeIpInfo = if (externalIp != null)
+            IpInfo(externalIp, geoIp(externalIp, client))
         else
             null
+
+        client.close()
+
+        maybeIpInfo
     }
 }
 
