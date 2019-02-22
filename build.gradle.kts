@@ -40,6 +40,7 @@ application {
 jib {
     val projectId: String? by project
 
+    from.image = "ubuntu"
     to.image = "gcr.io/$projectId/where-am-i"
     container {
         mainClass = application.mainClassName
