@@ -6,6 +6,6 @@
     <link rel="stylesheet" href="/assets/index.css">
 </head>
 <body>
-    <h2>hello, ${ipInfo.externalIp} from ${ipInfo.geo.regionName}, ${ipInfo.geo.countryCode}!</h2>
+    <h2>hello, from ${location}!</h2>
 </body>
 </html>

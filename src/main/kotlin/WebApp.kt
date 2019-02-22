@@ -44,7 +44,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 fun Application.module() {
-    val ipInfoAsync = ipInfoAsync()
+    val locationAsync = locationAsync()
 
     install(DefaultHeaders)
     install(CallLogging)
@@ -53,11 +53,11 @@ fun Application.module() {
     }
     install(Routing) {
         get("/") {
-            val ipInfo = ipInfoAsync.await()
-            if (ipInfo != null)
-                call.respond(FreeMarkerContent("index.ftl", mapOf("ipInfo" to ipInfo)))
+            val location = locationAsync.await()
+            if (location != null)
+                call.respond(FreeMarkerContent("index.ftl", mapOf("location" to location)))
             else
-                call.respondText("Could not get external ip")
+                call.respondText("Could not get location")
         }
         static("assets") {
             resources("assets")
@@ -65,50 +65,53 @@ fun Application.module() {
     }
 }
 
-suspend fun gcpExternalIp(client: HttpClient): String {
-    return client.get {
-        url("http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip")
+suspend fun gcpLocation(client: HttpClient): String? {
+    // https://cloud.google.com/compute/docs/regions-zones/
+    val zones = mapOf(
+            "asia-east1" to "Changhua County, Taiwan",
+            "asia-east2" to "Hong Kong",
+            "asia-northeast1" to "Tokyo, Japan",
+            "asia-south1" to "Mumbai, India",
+            "asia-southeast1" to "Jurong West, Singapore",
+            "australia-southeast1" to "Sydney, Australia",
+            "europe-north1" to "Hamina, Finland",
+            "europe-west1" to "St. Ghislain, Belgium",
+            "europe-west2" to "London, England, UK",
+            "europe-west3" to "Frankfurt, Germany",
+            "europe-west4" to "Eemshaven, Netherlands",
+            "northamerica-northeast1" to "Montréal, Québec, Canada",
+            "southamerica-east1" to "São Paulo, Brazil",
+            "us-central1" to "Council Bluffs, Iowa, USA",
+            "us-east1" to "Moncks Corner, South Carolina, USA",
+            "us-east4" to "Ashburn, Virginia, USA",
+            "us-west1" to "The Dalles, Oregon, USA",
+            "us-west2" to "Los Angeles, California, USA"
+    )
+
+    val zone = client.get<String> {
+        url("http://metadata/computeMetadata/v1/instance/zone")
         header("Metadata-Flavor", "Google")
-    }
+    }.split("/").last()
+
+    return zones.filterKeys{ zone.startsWith(it) }.values.lastOrNull()
 }
 
-suspend fun ipifyIp(client: HttpClient): String {
-    return client.get("https://api.ipify.org")
+suspend fun ipLocation(client: HttpClient): String? {
+    @Serializable
+    data class Geo(
+            val city: String,
+            val countryCode: String,
+            val regionName: String
+    )
+
+    val ip = client.get<String>("https://api.ipify.org")
+
+    val geo = client.get<Geo>("http://ip-api.com/json/$ip")
+
+    return "${geo.city}, ${geo.regionName}, ${geo.countryCode}"
 }
 
-suspend fun externalIp(client: HttpClient): String? {
-    return try {
-        gcpExternalIp(client)
-    }
-    catch (e: Exception) {
-        try {
-            ipifyIp(client)
-        }
-        catch (e: Exception) {
-            null
-        }
-    }
-}
-
-@Serializable
-data class Geo(
-        val city: String,
-        val country: String,
-        val countryCode: String,
-        val lat: Double,
-        val lon: Double,
-        val region: String,
-        val regionName: String
-)
-
-suspend fun geoIp(ip: String, client: HttpClient): Geo {
-    return client.get("http://ip-api.com/json/$ip")
-}
-
-@Serializable
-data class IpInfo(val externalIp: String, val geo: Geo)
-
-fun ipInfoAsync(): Deferred<IpInfo?> {
+fun locationAsync(): Deferred<String?> {
     return GlobalScope.async {
         val client = HttpClient {
             install(JsonFeature) {
@@ -116,15 +119,21 @@ fun ipInfoAsync(): Deferred<IpInfo?> {
             }
         }
 
-        val externalIp = externalIp(client)
-        val maybeIpInfo = if (externalIp != null)
-            IpInfo(externalIp, geoIp(externalIp, client))
-        else
-            null
+        val maybeLocation = try {
+            gcpLocation(client)
+        }
+        catch (e: Exception) {
+            try {
+                ipLocation(client)
+            }
+            catch (e: Exception) {
+                null
+            }
+        }
 
         client.close()
 
-        maybeIpInfo
+        maybeLocation
     }
 }
 
