@@ -18,7 +18,7 @@ repositories {
 
 dependencies {
     compile("io.ktor:ktor-server-core:1.1.3")
-    compile("io.ktor:ktor-server-netty:1.1.3")
+    compile("io.ktor:ktor-server-cio:1.1.3")
     compile("io.ktor:ktor-freemarker:1.1.3")
     compile("io.ktor:ktor-client-cio:1.1.3")
     compile("io.ktor:ktor-client-json-jvm:1.1.3")

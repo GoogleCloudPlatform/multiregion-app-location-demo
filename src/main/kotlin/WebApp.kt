@@ -34,7 +34,7 @@ import io.ktor.response.respond
 import io.ktor.response.respondText
 import io.ktor.routing.Routing
 import io.ktor.routing.get
-import io.ktor.server.netty.Netty
+import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.util.KtorExperimentalAPI
 import kotlinx.coroutines.Deferred
@@ -132,5 +132,5 @@ fun ipInfoAsync(): Deferred<IpInfo?> {
 @KtorExperimentalAPI
 fun main() {
     val port = System.getenv("PORT")?.toInt() ?: 8080
-    embeddedServer(Netty, port, watchPaths = listOf("build"), module = Application::module).start(true)
+    embeddedServer(CIO, port, watchPaths = listOf("build"), module = Application::module).start(true)
 }
