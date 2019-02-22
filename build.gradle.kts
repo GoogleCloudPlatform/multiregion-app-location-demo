@@ -41,7 +41,10 @@ jib {
     val projectId: String? by project
 
     to.image = "gcr.io/$projectId/where-am-i"
-    container.mainClass = "WebAppKt"
+    container {
+        mainClass = application.mainClassName
+        ports = listOf("8080")
+    }
 }
 
 tasks.create("stage") {
