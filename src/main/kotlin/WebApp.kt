@@ -47,6 +47,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.net.URL
 
+@KtorExperimentalAPI
 fun Application.module() {
     val locationAsync = locationAsync()
 
@@ -58,8 +59,12 @@ fun Application.module() {
     install(Routing) {
         get("/") {
             val (geo, imgUrl) = locationAsync.await()
+
+            if (imgUrl.second != null)
+                call.application.environment.log.error("Could not get location image", imgUrl.second)
+
             if (geo != null)
-                call.respond(FreeMarkerContent("index.ftl", mapOf("geo" to geo, "imgUrl" to imgUrl)))
+                call.respond(FreeMarkerContent("index.ftl", mapOf("geo" to geo, "imgUrl" to imgUrl.first)))
             else
                 call.respondText("Could not get location")
         }
@@ -120,8 +125,8 @@ suspend fun ipLocation(client: HttpClient): Geo? {
 @KtorExperimentalAPI
 suspend fun imgLocation(client: HttpClient, geo: Geo): URL? {
     val config = HoconApplicationConfig(ConfigFactory.load())
-    val searchCx = config.propertyOrNull("search.cx")?.getString() ?: return null
-    val searchKey = config.propertyOrNull("search.key")?.getString() ?: return null
+    val searchCx = config.propertyOrNull("search.cx")?.getString() ?: throw Exception("Missing setting: search.cx")
+    val searchKey = config.propertyOrNull("search.key")?.getString() ?: throw Exception("Missing setting: search.key")
 
     @Serializable
     data class Result(
@@ -148,7 +153,7 @@ suspend fun imgLocation(client: HttpClient, geo: Geo): URL? {
 }
 
 @KtorExperimentalAPI
-fun locationAsync(): Deferred<Pair<Geo?, URL?>> {
+fun locationAsync(): Deferred<Pair<Geo?, Pair<URL?, Exception?>>> {
     return GlobalScope.async {
         val client = HttpClient {
             install(JsonFeature) {
@@ -170,12 +175,12 @@ fun locationAsync(): Deferred<Pair<Geo?, URL?>> {
 
         val maybeImage = try {
             if (maybeLocation != null)
-                imgLocation(client, maybeLocation)
+                Pair(imgLocation(client, maybeLocation), null)
             else
-                null
+                throw Exception("Location was unknown")
         }
         catch (e: Exception) {
-            null
+            Pair(null, e)
         }
 
         client.close()
