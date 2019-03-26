@@ -47,6 +47,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.net.URL
 
+sealed class Try<out A> {
+    class Success<out A>(val value: A): Try<A>()
+    class Failure(val e: Exception): Try<Nothing>()
+}
+
 @KtorExperimentalAPI
 fun Application.module() {
     val locationAsync = locationAsync()
@@ -60,13 +65,19 @@ fun Application.module() {
         get("/") {
             val (geo, imgUrl) = locationAsync.await()
 
-            if (imgUrl.second != null)
-                call.application.environment.log.error("Could not get location image", imgUrl.second)
-
-            if (geo != null)
-                call.respond(FreeMarkerContent("index.ftl", mapOf("geo" to geo, "imgUrl" to imgUrl.first)))
-            else
+            if (geo != null) {
+                when (imgUrl) {
+                    is Try.Failure -> {
+                        call.application.environment.log.error("Could not get location image", imgUrl.e)
+                        call.respond(FreeMarkerContent("index.ftl", mapOf("geo" to geo)))
+                    }
+                    is Try.Success ->
+                        call.respond(FreeMarkerContent("index.ftl", mapOf("geo" to geo, "imgUrl" to imgUrl.value)))
+                }
+            }
+            else {
                 call.respondText("Could not get location")
+            }
         }
         get("/ping") {
             call.respondText("pong")
@@ -130,7 +141,7 @@ suspend fun ipLocation(client: HttpClient): Geo? {
 }
 
 @KtorExperimentalAPI
-suspend fun imgLocation(client: HttpClient, geo: Geo): URL? {
+suspend fun imgLocation(client: HttpClient, geo: Geo): URL {
     val config = HoconApplicationConfig(ConfigFactory.load())
     val searchCx = config.propertyOrNull("search.cx")?.getString() ?: throw Exception("Missing setting: search.cx")
     val searchKey = config.propertyOrNull("search.key")?.getString() ?: throw Exception("Missing setting: search.key")
@@ -160,7 +171,7 @@ suspend fun imgLocation(client: HttpClient, geo: Geo): URL? {
 }
 
 @KtorExperimentalAPI
-fun locationAsync(): Deferred<Pair<Geo?, Pair<URL?, Exception?>>> {
+fun locationAsync(): Deferred<Pair<Geo?, Try<URL>>> {
     return GlobalScope.async {
         val client = HttpClient {
             install(JsonFeature) {
@@ -182,12 +193,12 @@ fun locationAsync(): Deferred<Pair<Geo?, Pair<URL?, Exception?>>> {
 
         val maybeImage = try {
             if (maybeLocation != null)
-                Pair(imgLocation(client, maybeLocation), null)
+                Try.Success(imgLocation(client, maybeLocation))
             else
-                throw Exception("Location was unknown")
+                Try.Failure(Exception("Location was unknown"))
         }
         catch (e: Exception) {
-            Pair(null, e)
+            Try.Failure(e)
         }
 
         client.close()
