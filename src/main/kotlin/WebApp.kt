@@ -83,7 +83,14 @@ data class Geo(
         val regionName: String?,
         val country: String,
         val countryCode: String
-)
+) {
+    fun searchString(): String {
+        return if (regionName != null)
+            "$city, $regionName"
+        else
+            "$city, $country"
+    }
+}
 
 suspend fun gcpLocation(client: HttpClient): Geo? {
     // https://cloud.google.com/compute/docs/regions-zones/
@@ -140,7 +147,7 @@ suspend fun imgLocation(client: HttpClient, geo: Geo): URL? {
 
     val results = client.get<Results> {
         url("https://www.googleapis.com/customsearch/v1")
-        parameter("q", "${geo.city}, ${geo.regionName}, ${geo.country}")
+        parameter("q", geo.searchString())
         parameter("num", 1)
         parameter("safe", "active")
         parameter("searchType", "image")
