@@ -6,9 +6,15 @@
     <link rel="stylesheet" href="/assets/index.css">
 </head>
 <body>
-    <h2>hello, from ${location}!</h2>
+    <h2>hello, from ${geo.city}, ${geo.regionName} ${geo.country}!</h2>
 
     <p id="ping">Calculating round trip time...</p>
+
+    <#if imgUrl??>
+        <img src="${imgUrl}">
+    <#else>
+        Could not get an image for that location.
+    </#if>
 
     <script>
         var t0 = Date.now();

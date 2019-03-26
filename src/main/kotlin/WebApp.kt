@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import com.typesafe.config.ConfigFactory
 import freemarker.cache.ClassTemplateLoader
 import io.ktor.application.Application
 import io.ktor.application.call
@@ -23,7 +24,9 @@ import io.ktor.client.features.json.JsonFeature
 import io.ktor.client.features.json.serializer.KotlinxSerializer
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.parameter
 import io.ktor.client.request.url
+import io.ktor.config.HoconApplicationConfig
 import io.ktor.features.CallLogging
 import io.ktor.features.DefaultHeaders
 import io.ktor.freemarker.FreeMarker
@@ -42,6 +45,7 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.net.URL
 
 fun Application.module() {
     val locationAsync = locationAsync()
@@ -53,9 +57,9 @@ fun Application.module() {
     }
     install(Routing) {
         get("/") {
-            val location = locationAsync.await()
-            if (location != null)
-                call.respond(FreeMarkerContent("index.ftl", mapOf("location" to location)))
+            val (geo, imgUrl) = locationAsync.await()
+            if (geo != null)
+                call.respond(FreeMarkerContent("index.ftl", mapOf("geo" to geo, "imgUrl" to imgUrl)))
             else
                 call.respondText("Could not get location")
         }
@@ -68,27 +72,35 @@ fun Application.module() {
     }
 }
 
-suspend fun gcpLocation(client: HttpClient): String? {
+@Serializable
+data class Geo(
+        val city: String,
+        val regionName: String?,
+        val country: String,
+        val countryCode: String
+)
+
+suspend fun gcpLocation(client: HttpClient): Geo? {
     // https://cloud.google.com/compute/docs/regions-zones/
     val zones = mapOf(
-            "asia-east1" to "Changhua County, Taiwan",
-            "asia-east2" to "Hong Kong",
-            "asia-northeast1" to "Tokyo, Japan",
-            "asia-south1" to "Mumbai, India",
-            "asia-southeast1" to "Jurong West, Singapore",
-            "australia-southeast1" to "Sydney, Australia",
-            "europe-north1" to "Hamina, Finland",
-            "europe-west1" to "St. Ghislain, Belgium",
-            "europe-west2" to "London, England, UK",
-            "europe-west3" to "Frankfurt, Germany",
-            "europe-west4" to "Eemshaven, Netherlands",
-            "northamerica-northeast1" to "Montréal, Québec, Canada",
-            "southamerica-east1" to "São Paulo, Brazil",
-            "us-central1" to "Council Bluffs, Iowa, USA",
-            "us-east1" to "Moncks Corner, South Carolina, USA",
-            "us-east4" to "Ashburn, Virginia, USA",
-            "us-west1" to "The Dalles, Oregon, USA",
-            "us-west2" to "Los Angeles, California, USA"
+            "asia-east1" to Geo("Xianxi Township", "Changhua County", "Taiwan", "TWN"),
+            "asia-east2" to Geo("Hong Kong", null, "Hong Kong", "HK"),
+            "asia-northeast1" to Geo("Tokyo", null, "Japan", "JP"),
+            "asia-south1" to Geo("Mumbai", null, "India", "IN"),
+            "asia-southeast1" to Geo("Jurong West", null, "Singapore", "SG"),
+            "australia-southeast1" to Geo("Sydney", null, "Australia", "AU"),
+            "europe-north1" to Geo("Hamina", null, "Finland", "FI"),
+            "europe-west1" to Geo("St. Ghislain", null, "Belgium", "BE"),
+            "europe-west2" to Geo("London", null, "England", "GB"),
+            "europe-west3" to Geo("Frankfurt", null, "Germany", "DE"),
+            "europe-west4" to Geo("Eemshaven", null, "Netherlands", "NL"),
+            "northamerica-northeast1" to Geo("Montréal", "Québec", "Canada", "CA"),
+            "southamerica-east1" to Geo("São Paulo", null, "Brazil", "BR"),
+            "us-central1" to Geo("Council Bluffs", "Iowa", "United States", "US"),
+            "us-east1" to Geo("Moncks Corner", "South Carolina", "United States", "US"),
+            "us-east4" to Geo("Ashburn", "Virginia", "United States", "US"),
+            "us-west1" to Geo("The Dalles", "Oregon", "United States", "US"),
+            "us-west2" to Geo("Los Angeles", "California", "United States", "US")
     )
 
     val zone = client.get<String> {
@@ -99,22 +111,44 @@ suspend fun gcpLocation(client: HttpClient): String? {
     return zones.filterKeys{ zone.startsWith(it) }.values.lastOrNull()
 }
 
-suspend fun ipLocation(client: HttpClient): String? {
-    @Serializable
-    data class Geo(
-            val city: String,
-            val countryCode: String,
-            val regionName: String
-    )
-
+suspend fun ipLocation(client: HttpClient): Geo? {
     val ip = client.get<String>("https://api.ipify.org")
 
-    val geo = client.get<Geo>("http://ip-api.com/json/$ip")
-
-    return "${geo.city}, ${geo.regionName}, ${geo.countryCode}"
+    return client.get<Geo>("http://ip-api.com/json/$ip")
 }
 
-fun locationAsync(): Deferred<String?> {
+@KtorExperimentalAPI
+suspend fun imgLocation(client: HttpClient, geo: Geo): URL? {
+    val config = HoconApplicationConfig(ConfigFactory.load())
+    val searchCx = config.propertyOrNull("search.cx")?.getString() ?: return null
+    val searchKey = config.propertyOrNull("search.key")?.getString() ?: return null
+
+    @Serializable
+    data class Result(
+            val link: String
+    )
+
+    @Serializable
+    data class Results(
+            val items: Array<Result>
+    )
+
+    val results = client.get<Results> {
+        url("https://www.googleapis.com/customsearch/v1")
+        parameter("q", "${geo.city}, ${geo.regionName}, ${geo.country}")
+        parameter("num", 1)
+        parameter("safe", "active")
+        parameter("searchType", "image")
+        parameter("rights", "cc_publicdomain")
+        parameter("cx", searchCx)
+        parameter("key", searchKey)
+    }
+
+    return URL(results.items.firstOrNull()?.link)
+}
+
+@KtorExperimentalAPI
+fun locationAsync(): Deferred<Pair<Geo?, URL?>> {
     return GlobalScope.async {
         val client = HttpClient {
             install(JsonFeature) {
@@ -134,9 +168,19 @@ fun locationAsync(): Deferred<String?> {
             }
         }
 
+        val maybeImage = try {
+            if (maybeLocation != null)
+                imgLocation(client, maybeLocation)
+            else
+                null
+        }
+        catch (e: Exception) {
+            null
+        }
+
         client.close()
 
-        maybeLocation
+        Pair(maybeLocation, maybeImage)
     }
 }
 
