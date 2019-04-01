@@ -206,15 +206,15 @@ fun locationAsync(): Deferred<Pair<Geo?, Try<URL>>> {
             }
         }
 
-        val maybeImage = try {
-            if (maybeLocation != null)
+        val maybeImage = if (maybeLocation != null)
+            try {
                 Try.Success(imgLocation(client, maybeLocation))
-            else
-                Try.Failure(Exception("Location was unknown"))
-        }
-        catch (e: Exception) {
-            Try.Failure(e)
-        }
+            }
+            catch (e: Exception) {
+                Try.Failure(e)
+            }
+        else
+            Try.Failure(Exception("Location was unknown"))
 
         client.close()
 
