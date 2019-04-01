@@ -6,7 +6,7 @@
     <link rel="stylesheet" href="/assets/index.css">
 </head>
 <body>
-    <h2>hello, from ${geo.city}, ${geo.regionName} ${geo.country}!</h2>
+    <h2>hello, from ${geo.searchString()}!</h2>
 
     <p id="ping">Calculating round trip time...</p>
 
