@@ -141,10 +141,25 @@ suspend fun ipLocation(client: HttpClient): Geo? {
 }
 
 @KtorExperimentalAPI
-suspend fun imgLocation(client: HttpClient, geo: Geo): URL {
+suspend fun config(client: HttpClient, prop: String, attribute: String): String {
     val config = HoconApplicationConfig(ConfigFactory.load())
-    val searchCx = config.propertyOrNull("search.cx")?.getString() ?: throw Exception("Missing setting: search.cx")
-    val searchKey = config.propertyOrNull("search.key")?.getString() ?: throw Exception("Missing setting: search.key")
+
+    return config.propertyOrNull(prop)?.getString() ?: try {
+        client.get<String> {
+            url("http://metadata/computeMetadata/v1/project/attributes/$attribute")
+            header("Metadata-Flavor", "Google")
+        }
+    }
+    catch (e: Exception){
+        throw Exception("Could not find setting with prop $prop and attribute $attribute")
+    }
+}
+
+
+@KtorExperimentalAPI
+suspend fun imgLocation(client: HttpClient, geo: Geo): URL {
+    val searchCx = config(client, "search.cx", "SEARCH_CX")
+    val searchKey = config(client, "search.key", "SEARCH_KEY")
 
     @Serializable
     data class Result(
