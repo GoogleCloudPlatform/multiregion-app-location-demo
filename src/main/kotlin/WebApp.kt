@@ -150,8 +150,8 @@ suspend fun config(client: HttpClient, prop: String, attribute: String): String 
             header("Metadata-Flavor", "Google")
         }
     }
-    catch (e: Exception){
-        throw Exception("Could not find setting with prop $prop and attribute $attribute")
+    catch (e: Exception) {
+        throw Exception("Could not find setting with prop $prop and attribute $attribute", e)
     }
 }
 
