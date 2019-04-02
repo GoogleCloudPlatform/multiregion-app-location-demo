@@ -19,7 +19,6 @@ import io.micronaut.context.annotation.Requirements
 import io.micronaut.context.annotation.Requires
 import io.micronaut.context.annotation.Value
 import io.micronaut.context.env.Environment
-import io.micronaut.discovery.ServiceInstance
 import io.micronaut.discovery.cloud.gcp.GoogleComputeInstanceMetadataResolver
 import io.micronaut.discovery.cloud.gcp.GoogleComputeMetadataConfiguration
 import io.micronaut.http.HttpResponse
@@ -28,6 +27,7 @@ import io.micronaut.http.annotation.Get
 import io.micronaut.http.annotation.QueryValue
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.runtime.Micronaut
+import io.micronaut.runtime.server.EmbeddedServerInstance
 import io.micronaut.views.View
 import io.reactivex.Single
 import org.slf4j.LoggerFactory
@@ -110,7 +110,7 @@ class NonGcpService(private val ipifyService: IpifyService,
 
 @Singleton
 @Requires(env = [Environment.GOOGLE_COMPUTE])
-class GcpService(private val serviceInstance: ServiceInstance): GeoService {
+class GcpService(private val embeddedServerInstance: EmbeddedServerInstance): GeoService {
     // https://cloud.google.com/compute/docs/regions-zones/
     val zones = mapOf(
             "asia-east1" to Geo("Xianxi Township", "Changhua County", "Taiwan", "TWN"),
@@ -134,7 +134,7 @@ class GcpService(private val serviceInstance: ServiceInstance): GeoService {
     )
 
     override fun geo(): Single<Geo> {
-        val maybeGeo = serviceInstance.region.flatMap { region ->
+        val maybeGeo = embeddedServerInstance.region.flatMap { region ->
             Optional.ofNullable(zones[region])
         }
 
