@@ -19,7 +19,7 @@ import io.micronaut.context.annotation.Requirements
 import io.micronaut.context.annotation.Requires
 import io.micronaut.context.annotation.Value
 import io.micronaut.context.env.Environment
-import io.micronaut.discovery.cloud.ComputeInstanceMetadata
+import io.micronaut.discovery.ServiceInstance
 import io.micronaut.discovery.cloud.gcp.GoogleComputeInstanceMetadataResolver
 import io.micronaut.discovery.cloud.gcp.GoogleComputeMetadataConfiguration
 import io.micronaut.http.HttpResponse
@@ -32,6 +32,7 @@ import io.micronaut.views.View
 import io.reactivex.Single
 import org.slf4j.LoggerFactory
 import java.net.URL
+import java.util.*
 import javax.inject.Singleton
 import javax.validation.constraints.NotBlank
 
@@ -109,7 +110,7 @@ class NonGcpService(private val ipifyService: IpifyService,
 
 @Singleton
 @Requires(env = [Environment.GOOGLE_COMPUTE])
-class GcpService(private val computeInstanceMetadata: ComputeInstanceMetadata): GeoService {
+class GcpService(private val serviceInstance: ServiceInstance): GeoService {
     // https://cloud.google.com/compute/docs/regions-zones/
     val zones = mapOf(
             "asia-east1" to Geo("Xianxi Township", "Changhua County", "Taiwan", "TWN"),
@@ -133,9 +134,12 @@ class GcpService(private val computeInstanceMetadata: ComputeInstanceMetadata): 
     )
 
     override fun geo(): Single<Geo> {
-        val geo = zones[computeInstanceMetadata.region]
-        return if (geo != null)
-            Single.just(geo)
+        val maybeGeo = serviceInstance.region.flatMap { region ->
+            Optional.ofNullable(zones[region])
+        }
+
+        return if (maybeGeo.isPresent)
+            Single.just(maybeGeo.get())
         else
             Single.error(Exception("Could not determine region"))
     }

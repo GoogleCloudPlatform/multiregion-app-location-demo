@@ -1,8 +1,13 @@
 package whereami
 
 import io.micronaut.context.ApplicationContext
+import io.micronaut.context.env.Environment
+import io.micronaut.discovery.ServiceInstance
+import io.micronaut.discovery.cloud.ComputeInstanceMetadata
+import io.micronaut.runtime.server.EmbeddedServerInstance
 import org.spekframework.spek2.Spek
 import org.spekframework.spek2.style.specification.describe
+import kotlin.test.assertFails
 import kotlin.test.assertNotNull
 
 class WebAppSpec: Spek({
