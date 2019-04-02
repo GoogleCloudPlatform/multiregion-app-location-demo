@@ -6,15 +6,16 @@
     <link rel="stylesheet" href="/assets/index.css">
 </head>
 <body>
-    <h2>hello, from ${geo.searchString()}!</h2>
+    <h2>hello, from <span th:text="${geo.searchString()}"></span>!</h2>
 
     <p id="ping">Calculating round trip time...</p>
 
-    <#if imgUrl??>
-        <img src="${imgUrl}">
-    <#else>
+    <div th:if="${maybeImage}">
+        <img th:src="${maybeImage}">
+    </div>
+    <div th:unless="${maybeImage}">
         Could not get an image for that location.
-    </#if>
+    </div>
 
     <script>
         var t0 = Date.now();

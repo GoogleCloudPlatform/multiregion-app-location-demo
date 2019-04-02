@@ -1,40 +1,83 @@
-import org.gradle.tooling.GradleConnector
-import java.util.concurrent.*
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.api.tasks.testing.logging.TestLogEvent
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.allopen.gradle.AllOpenExtension
 
 plugins {
-    java
     application
-    kotlin("jvm") version "1.3.20"
-    id("kotlinx-serialization") version "1.3.20"
-    id("com.google.cloud.tools.jib") version "1.0.0"
+    kotlin("jvm") version "1.3.21"
+    kotlin("kapt") version "1.3.21"
+    id("org.jetbrains.kotlin.plugin.allopen") version "1.3.21"
+    id("com.google.cloud.tools.jib") version "1.0.2"
     id("com.github.johnrengelman.shadow") version "4.0.4"
 }
 
 repositories {
     mavenLocal()
     mavenCentral()
-    maven("https://kotlin.bintray.com/kotlinx")
+    jcenter()
 }
 
 dependencies {
-    compile("io.ktor:ktor-server-core:1.1.3")
-    compile("io.ktor:ktor-server-cio:1.1.3")
-    compile("io.ktor:ktor-freemarker:1.1.3")
-    compile("io.ktor:ktor-client-cio:1.1.3")
-    compile("io.ktor:ktor-client-json-jvm:1.1.3")
+    compile(kotlin("stdlib"))
+    compile(kotlin("reflect"))
+
+    compile("io.micronaut:micronaut-runtime:1.0.5")
+    compile("io.micronaut:micronaut-http-client:1.0.5")
+    compile("io.micronaut:micronaut-http-server-netty:1.0.5")
+    compile("io.micronaut:micronaut-views:1.0.5")
     compile("ch.qos.logback:logback-classic:1.2.3")
+
+    runtime("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.7")
+    runtime("org.thymeleaf:thymeleaf:3.0.11.RELEASE")
+
+    kapt("io.micronaut:micronaut-inject-java:1.0.5")
+    kapt("io.micronaut:micronaut-validation:1.0.5")
+
+    testImplementation("org.jetbrains.kotlin:kotlin-test:1.3.21")
+    testImplementation("org.spekframework.spek2:spek-dsl-jvm:2.0.1")
+    testRuntimeOnly("org.spekframework.spek2:spek-runner-junit5:2.0.1")
+
+    kaptTest("io.micronaut:micronaut-inject-java:1.0.5")
 }
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
 }
 
-tasks.compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+tasks.withType<KotlinCompile> {
+    kotlinOptions {
+        jvmTarget = "1.8"
+        javaParameters = true
+    }
 }
 
 application {
-    mainClassName = "WebAppKt"
+    mainClassName = "whereami.WebAppKt"
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform {
+        includeEngines("spek2")
+    }
+    testLogging {
+        showStandardStreams = true
+        exceptionFormat = TestExceptionFormat.FULL
+        events(TestLogEvent.STARTED, TestLogEvent.PASSED, TestLogEvent.SKIPPED, TestLogEvent.FAILED)
+    }
+}
+
+configure<AllOpenExtension> {
+    annotation("io.micronaut.aop.Around")
+}
+
+tasks.all {
+    when(this) {
+        is JavaForkOptions -> {
+            jvmArgs("-noverify")
+            jvmArgs("-XX:TieredStopAtLevel=1")
+        }
+    }
 }
 
 jib {
@@ -50,35 +93,3 @@ jib {
 tasks.create("stage") {
     dependsOn("shadowJar")
 }
-
-
-// one task that does both the continuous compile and the run
-
-tasks.create("dev") {
-    doLast {
-        fun fork(task: String, vararg args: String): Future<*> {
-            return Executors.newSingleThreadExecutor().submit {
-                GradleConnector.newConnector()
-                               .forProjectDirectory(project.projectDir)
-                               .connect()
-                               .use {
-                                   it.newBuild()
-                                     .addArguments(*args)
-                                     .setStandardError(System.err)
-                                     .setStandardInput(System.`in`)
-                                     .setStandardOutput(System.out)
-                                     .forTasks(task)
-                                     .run()
-                               }
-            }
-        }
-
-        val classesFuture = fork("classes", "-t")
-        val runFuture = fork("run")
-
-        classesFuture.get()
-        runFuture.get()
-    }
-}
-
-defaultTasks("dev")
