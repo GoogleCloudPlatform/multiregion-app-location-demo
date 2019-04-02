@@ -161,7 +161,7 @@ class CustomInstanceMetadataResolver(objectMapper: ObjectMapper,
     fun getAttribute(key: String): String? {
         val connectionTimeoutMs = configuration.connectTimeout.toMillis().toInt()
         val readTimeoutMs = configuration.readTimeout.toMillis().toInt()
-        val projectResultJson = readGcMetadataUrl(URL(configuration.projectMetadataUrl + "?recursive=true"), connectionTimeoutMs, readTimeoutMs)
+        val projectResultJson = readGcMetadataUrl(URL(configuration.metadataUrl + "?recursive=true"), connectionTimeoutMs, readTimeoutMs)
 
         return projectResultJson.findValue("attributes").findValue(key).asText()
     }
