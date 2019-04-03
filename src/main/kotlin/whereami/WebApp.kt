@@ -106,7 +106,7 @@ class NonGcpService(private val ipifyService: IpifyService,
 
 @Client("http://metadata/computeMetadata/v1")
 @Header(name = "Metadata-Flavor", value = "Google")
-@Requires(notEnv = [Environment.GOOGLE_COMPUTE])
+@Requires(env = [Environment.GOOGLE_COMPUTE])
 interface GcpMetadataService {
 
     @Get("/instance/zone")
