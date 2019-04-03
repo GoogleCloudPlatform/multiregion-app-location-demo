@@ -14,16 +14,14 @@ package whereami/*
  * limitations under the License.
  */
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import io.micronaut.context.annotation.Requirements
 import io.micronaut.context.annotation.Requires
 import io.micronaut.context.annotation.Value
 import io.micronaut.context.env.Environment
-import io.micronaut.discovery.cloud.gcp.GoogleComputeInstanceMetadataResolver
-import io.micronaut.discovery.cloud.gcp.GoogleComputeMetadataConfiguration
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.Controller
 import io.micronaut.http.annotation.Get
+import io.micronaut.http.annotation.Header
 import io.micronaut.http.annotation.QueryValue
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.runtime.Micronaut
@@ -31,7 +29,6 @@ import io.micronaut.views.View
 import io.reactivex.Single
 import org.slf4j.LoggerFactory
 import java.net.URL
-import java.util.*
 import javax.inject.Singleton
 import javax.validation.constraints.NotBlank
 
@@ -107,10 +104,22 @@ class NonGcpService(private val ipifyService: IpifyService,
 
 }
 
+@Client("http://metadata/computeMetadata/v1")
+@Header(name = "Metadata-Flavor", value = "Google")
+@Requires(notEnv = [Environment.GOOGLE_COMPUTE])
+interface GcpMetadataService {
+
+    @Get("/instance/zone")
+    fun zone(): Single<String>
+
+    @Get("/project/attributes/{key}")
+    fun attribute(key: String): Single<String>
+
+}
+
 @Singleton
 @Requires(env = [Environment.GOOGLE_COMPUTE])
-class GcpService(private val googleComputeInstanceMetadataResolver: GoogleComputeInstanceMetadataResolver,
-                 private val environment: Environment): GeoService {
+class GcpGeoService(private val gcpMetadataService: GcpMetadataService): GeoService {
     // https://cloud.google.com/compute/docs/regions-zones/
     val zones = mapOf(
             "asia-east1" to Geo("Xianxi Township", "Changhua County", "Taiwan", "TWN"),
@@ -134,14 +143,10 @@ class GcpService(private val googleComputeInstanceMetadataResolver: GoogleComput
     )
 
     override fun geo(): Single<Geo> {
-        val maybeGeo = googleComputeInstanceMetadataResolver.resolve(environment).flatMap { metadata ->
-            Optional.ofNullable(zones[metadata.region])
+        return gcpMetadataService.zone().flatMap { zone ->
+            val zoneId = zone.split("/").last()
+            Single.just(zones.filterKeys{ zoneId.startsWith(it) }.values.last())
         }
-
-        return if (maybeGeo.isPresent)
-            Single.just(maybeGeo.get())
-        else
-            Single.error(Exception("Could not determine region"))
     }
 }
 
@@ -151,48 +156,38 @@ interface GeoService {
 
 @Singleton
 @Requirements(Requires(property = "search.cx"), Requires(property = "search.key"))
-class ImageServiceConfigProperty(@param:Value("\${search.cx}") override val cx: String,
-                                 @param:Value("\${search.key}") override val key: String): ImageServiceConfig
+class ImageServiceConfigPropertyRaw(@param:Value("\${search.cx}") val cx: String,
+                                 @param:Value("\${search.key}") val key: String)
 
 @Singleton
-@Requires(env = [Environment.GOOGLE_COMPUTE], missingBeans = [ImageServiceConfigProperty::class])
-class CustomInstanceMetadataResolver(objectMapper: ObjectMapper,
-                                     private val configuration: GoogleComputeMetadataConfiguration): GoogleComputeInstanceMetadataResolver(objectMapper, configuration) {
-    fun getAttribute(key: String): String? {
-        val connectionTimeoutMs = configuration.connectTimeout.toMillis().toInt()
-        val readTimeoutMs = configuration.readTimeout.toMillis().toInt()
-        val projectResultJson = readGcMetadataUrl(URL(configuration.metadataUrl + "?recursive=true"), connectionTimeoutMs, readTimeoutMs)
-
-        return projectResultJson.findValue("attributes").findValue(key).asText()
-    }
+@Requires(beans = [ImageServiceConfigPropertyRaw::class])
+class ImageServiceConfigProperty(imageServiceConfigPropertyRaw: ImageServiceConfigPropertyRaw): ImageServiceConfig {
+    override val cx: Single<String> = Single.just(imageServiceConfigPropertyRaw.cx)
+    override val key: Single<String> = Single.just(imageServiceConfigPropertyRaw.key)
 }
 
 @Singleton
 @Requires(env = [Environment.GOOGLE_COMPUTE])
-class ImageServiceConfigCloud(customInstanceMetadataResolver: CustomInstanceMetadataResolver): ImageServiceConfig {
-    override val cx: String? = customInstanceMetadataResolver.getAttribute("SEARCH_CX")
-    override val key: String? = customInstanceMetadataResolver.getAttribute("SEARCH_KEY")
+class ImageServiceConfigMetadata(private val gcpMetadataService: GcpMetadataService): ImageServiceConfig {
+    override val cx: Single<String> = gcpMetadataService.attribute("SEARCH_CX")
+    override val key: Single<String> = gcpMetadataService.attribute("SEARCH_KEY")
 }
 
 @Singleton
 @Requires(missingBeans = [ImageServiceConfig::class])
 class ImageServiceConfigMissing: ImageServiceConfig {
-    override val cx: String? = null
-    override val key: String? = null
+    override val cx: Single<String> = Single.error(Exception("Could not find search cx config"))
+    override val key: Single<String> = Single.error(Exception("Could not find search key config"))
 }
 
 interface ImageServiceConfig {
-    val cx: String?
-    val key: String?
+    val cx: Single<String>
+    val key: Single<String>
 }
 
-data class Result(
-        val link: String
-)
+data class Result(val link: String)
 
-data class Results(
-        val items: Array<Result>
-)
+data class Results(val items: Array<Result>)
 
 @Client("https://www.googleapis.com/customsearch/v1")
 interface CustomSearchService {
@@ -212,15 +207,20 @@ class ImageService(private val config: ImageServiceConfig,
                    private val customSearch: CustomSearchService) {
 
     fun fromGeo(geo: Geo): Single<URL> {
-        val cx = config.cx ?: return Single.error(Exception("Could not get search cx setting"))
-        val key = config.key ?: return Single.error(Exception("Could not get search key setting"))
-
-        return customSearch.search(cx, key, geo.searchString()).flatMap { results ->
-            val url = try { URL(results.items.first().link) } catch (e: Exception) { null }
-            if (url != null)
-                Single.just(url)
-            else
-                Single.error(Exception("Image could not be found"))
+        return config.cx.flatMap { cx ->
+            config.key.flatMap { key ->
+                customSearch.search(cx, key, geo.searchString()).flatMap { results ->
+                    val url = try {
+                        URL(results.items.first().link)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (url != null)
+                        Single.just(url)
+                    else
+                        Single.error(Exception("Image could not be found"))
+                }
+            }
         }
     }
 

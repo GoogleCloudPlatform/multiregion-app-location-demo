@@ -27,15 +27,18 @@ class WebAppSpec: Spek({
 
         val imageServiceConfig = applicationContext.getBean(ImageServiceConfig::class.java)
 
-        if (imageServiceConfig.cx == null || imageServiceConfig.key == null) {
-            xit("ImageService not configured") {}
-        }
-        else {
+        try {
+            imageServiceConfig.cx.blockingGet()
+            imageServiceConfig.key.blockingGet()
+
             it("ImageService must work when configured") {
                 val imageService = applicationContext.getBean(ImageService::class.java)
                 val geo = Geo("Crested Butte", "Colorado", "United States", "US")
                 assertNotNull(imageService.fromGeo(geo).blockingGet())
             }
+        }
+        catch (e: Exception) {
+            xit("ImageService not configured") {}
         }
 
         afterGroup {
