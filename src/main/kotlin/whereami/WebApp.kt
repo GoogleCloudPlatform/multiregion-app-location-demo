@@ -167,7 +167,7 @@ class ImageServiceConfigProperty(imageServiceConfigPropertyRaw: ImageServiceConf
 }
 
 @Singleton
-@Requires(env = [Environment.GOOGLE_COMPUTE])
+@Requires(env = [Environment.GOOGLE_COMPUTE], missingBeans = [ImageServiceConfigProperty::class])
 class ImageServiceConfigMetadata(private val gcpMetadataService: GcpMetadataService): ImageServiceConfig {
     override val cx: Single<String> = gcpMetadataService.attribute("SEARCH_CX")
     override val key: Single<String> = gcpMetadataService.attribute("SEARCH_KEY")
