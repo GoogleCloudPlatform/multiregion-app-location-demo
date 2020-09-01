@@ -4,6 +4,7 @@ steps:
     args:
       - '-bucket=$PROJECT_ID-$REPO_NAME-cloudbuild-cache'
       - '-restore=gradle-{{ hashGlob "build.gradle.kts" }}'
+      - '-restore=gradle-'
       - '-dir=/home/.gradle'
       - '-allow-failure'
     volumes:
