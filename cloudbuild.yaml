@@ -4,29 +4,29 @@ steps:
     args:
       - '-bucket=$PROJECT_ID-$REPO_NAME-cloudbuild-cache'
       - '-restore=gradle-{{ hashGlob "build.gradle.kts" }}'
-      - '-dir=/.gradle'
+      - '-dir=/home/.gradle'
       - '-allow-failure'
     volumes:
       - name: 'gradle'
-        path: '/.gradle'
+        path: '/home/.gradle'
 
   - id: 'build-container'
     name: 'gcr.io/cloud-builders/javac:8'
     entrypoint: './gradlew'
-    args: ['--console=plain', '--no-daemon', 'jib', '-Djib.to.image=gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
+    args: ['--gradle-user-home=/home', '--console=plain', '--no-daemon', 'jib', '-Djib.to.image=gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
     volumes:
       - name: 'gradle'
-        path: '/.gradle'
+        path: '/home/.gradle'
 
   - id: 'save-cache'
     name: 'us-docker.pkg.dev/vargolabs/gcs-cacher/gcs-cacher:0.1'
     args:
       - '-bucket=$PROJECT_ID-$REPO_NAME-cloudbuild-cache'
       - '-cache=gradle-{{ hashGlob "build.gradle.kts" }}'
-      - '-dir=/.gradle'
+      - '-dir=/home/.gradle'
     volumes:
       - name: 'gradle'
-        path: '/.gradle'
+        path: '/home/.gradle'
 
   - id: 'deploy'
     name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
