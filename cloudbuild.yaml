@@ -1,5 +1,8 @@
 steps:
 - name: 'gcr.io/cloud-builders/javac:8'
   entrypoint: './gradlew'
-  args: ['jibDockerBuild', '--no-daemon', '-PprojectId=$PROJECT_ID']
-images: ['gcr.io/$PROJECT_ID/where-am-i']
+  args: ['--console=plain', '--no-daemon', 'jib', '-Djib.to.image=gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA']
+
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'gcloud'
+  args: ['run', 'deploy', '--quiet', '--image=gcr.io/$PROJECT_ID/$REPO_NAME:$COMMIT_SHA', '--platform=managed', '--project=$PROJECT_ID', '--region=us-central1', '--allow-unauthenticated', '--memory=512Mi', '--cpu=2', '$REPO_NAME']
